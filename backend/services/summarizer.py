@@ -26,7 +26,7 @@ async def generate_ai_summary(img1_base64: str, img2_base64: str, highlighted_ba
         data_url_highlighted = f"data:image/png;base64,{highlighted_base64}"
         
         response = await client.chat.completions.create(
-            model="gpt-5.1",
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "user",
