@@ -1,0 +1,322 @@
+import { useEffect, useMemo, useState } from "react";
+import "./App.css";
+
+// Dev: talk to local API. Prod (Docker/nginx): use same-origin unless VITE_API_URL is set.
+const API_URL =
+  import.meta.env.VITE_API_URL !== undefined && import.meta.env.VITE_API_URL !== ""
+    ? import.meta.env.VITE_API_URL
+    : import.meta.env.DEV
+      ? "http://localhost:8000"
+      : "";
+
+const toDataUrl = (base64) => (base64 ? `data:image/png;base64,${base64}` : null);
+
+function App() {
+  const [file1, setFile1] = useState(null);
+  const [file2, setFile2] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+  const [modalImage, setModalImage] = useState(null);
+  const [modalZoom, setModalZoom] = useState(1);
+
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+  useEffect(() => {
+    if (!modalImage) {
+      document.body.style.overflow = "";
+      return;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setModalImage(null);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [modalImage]);
+
+  const handleFileChange = (event, setter) => {
+    const selected = event.target.files?.[0];
+    setter(selected || null);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!file1 || !file2) {
+      setError("Please select both files before submitting.");
+      return;
+    }
+
+    setError("");
+    setIsSubmitting(true);
+    setResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file1", file1, file1.name);
+      formData.append("file2", file2, file2.name);
+
+      const response = await fetch(`${API_URL}/compare`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let detail = "Comparison failed.";
+        try {
+          const payload = await response.json();
+          detail = payload.detail || detail;
+        } catch (_) {
+          detail = await response.text();
+        }
+        throw new Error(detail);
+      }
+
+      const payload = await response.json();
+      setResult(payload);
+    } catch (err) {
+      setError(err.message || "An unexpected error occurred.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const combinedSrc = useMemo(
+    () => toDataUrl(result?.images?.highlighted_1),
+    [result]
+  );
+
+  const openModal = (src, alt) => {
+    if (!src) return;
+    setModalImage({ src, alt });
+    setModalZoom(1);
+  };
+
+  const closeModal = () => setModalImage(null);
+
+  const adjustZoom = (delta) => {
+    setModalZoom((prev) => clamp(parseFloat((prev + delta).toFixed(2)), 1, 4));
+  };
+
+  const handleZoomInput = (event) => {
+    const value = parseFloat(event.target.value);
+    if (!Number.isNaN(value)) {
+      setModalZoom(clamp(value, 1, 4));
+    }
+  };
+
+  const handleWheelZoom = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const direction = event.deltaY < 0 ? 0.1 : -0.1;
+    adjustZoom(direction);
+  };
+
+  return (
+    <div className="page">
+      <header className="top-strip">
+        <div className="site-brand">
+          <span className="brand-mark">CV</span>
+          {/* <span className="brand-text">Oracle Cloud</span> */}
+        </div>
+        <span className="top-caption">CADVISION</span>
+      </header>
+
+      <div className="page-content">
+        <section className="hero">
+          <div className="hero-copy">
+            <h1>CADVision: An AI-powered CAD Designs Comparison Tool</h1>
+            <p>
+              Inspired by the Oracle Cloud experience, CADVISION compares two drawing
+              revisions, highlights differences, and keeps your review workflow simple.
+            </p>
+          </div>
+          <div className="hero-visual">
+            <div className="hero-visual-frame">
+              <span className="hero-visual-label">Always Free Experience</span>
+              <p>Upload two revisions and review differences in seconds.</p>
+            </div>
+          </div>
+        </section>
+
+        <main className="workspace">
+          <section className="workspace-card">
+            <div className="workspace-header">
+              <h2>Compare your drawings</h2>
+              <p>
+                Choose two CAD exports (PNG, JPG, or PDF). CADVISION aligns components and highlights
+                key changes automatically.
+              </p>
+            </div>
+
+            <form className="upload-form" onSubmit={handleSubmit}>
+              <label>
+                <span>First file</span>
+                <input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.pdf"
+                  onChange={(event) => handleFileChange(event, setFile1)}
+                  disabled={isSubmitting}
+                />
+              </label>
+              <label>
+                <span>Second file</span>
+                <input
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.pdf"
+                  onChange={(event) => handleFileChange(event, setFile2)}
+                  disabled={isSubmitting}
+                />
+              </label>
+
+              <button className="compare-button" type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Comparing..." : "Run Comparison"}
+              </button>
+            </form>
+
+            {error && <div className="status error">{error}</div>}
+          </section>
+
+          {result && (
+            <section className="results">
+              <div className="results-header">
+                {(() => {
+                  const aiText = result?.ai_summary || "";
+                  const noChanges = /no change(s)?|no structural changes detected/i.test(aiText);
+                  return (
+                    <h2>{noChanges ? "No changes" : "Comparison results"}</h2>
+                  );
+                })()}
+                <p>
+                  {(() => {
+                    const aiText = result?.ai_summary || "";
+                    const noChanges = /no change(s)?|no structural changes detected/i.test(aiText);
+                    return noChanges
+                      ? "No differences detected between the two revisions."
+                      : "Review the highlighted differences and AI analysis below.";
+                  })()}
+                </p>
+
+                {!(/no change(s)?|no structural changes detected/i.test(result?.ai_summary || "")) && (
+                  <div className="legend">
+                    <span className="legend-item">
+                      <span className="legend-swatch legend-add" />
+                      Additions (green)
+                    </span>
+                    <span className="legend-item">
+                      <span className="legend-swatch legend-del" />
+                      Deletions (red)
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {combinedSrc && (
+                <figure className="image-card combined-image">
+                  <img src={combinedSrc} alt="Combined comparison" />
+                  <figcaption>Side-by-side Comparison with Highlights</figcaption>
+                  <div className="figure-actions">
+                    <button
+                      type="button"
+                      className="view-button"
+                      onClick={() => openModal(combinedSrc, "Combined comparison")}
+                    >
+                      View Full Size
+                    </button>
+                    <a
+                      href={combinedSrc}
+                      download="cad_comparison.png"
+                      className="download-link"
+                    >
+                      Download
+                    </a>
+                  </div>
+                </figure>
+              )}
+
+              <div className="summary-card">
+                <div className="summary-card-header">
+                  <div>
+                    <p className="summary-eyebrow">AI-Generated Analysis</p>
+                    <h3>Revision Summary</h3>
+                  </div>
+                </div>
+                {result?.ai_summary ? (
+                  <div 
+                    className="summary-content markdown-content"
+                    dangerouslySetInnerHTML={{ __html: result.ai_summary }}
+                  />
+                ) : (
+                  <p className="summary-placeholder">
+                    AI summary will appear here after a successful comparison.
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+        </main>
+      </div>
+
+      <footer>
+        <span>© 2024 CADVision. Powered by Oracle Cloud Infrastructure.</span>
+        <span>AI-Enhanced CAD Comparison Tool</span>
+      </footer>
+
+      {modalImage && (
+        <div className="modal-backdrop" role="presentation" onClick={closeModal}>
+          <div
+            className="modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={modalImage.alt}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button type="button" className="modal-close" onClick={closeModal}>
+              Close
+            </button>
+            <div className="modal-toolbar">
+              <button type="button" onClick={() => adjustZoom(-0.1)}>
+                −
+              </button>
+              <input
+                type="range"
+                min="1"
+                max="4"
+                step="0.1"
+                value={modalZoom}
+                onChange={handleZoomInput}
+                aria-label="Zoom level"
+              />
+              <span>{Math.round(modalZoom * 100)}%</span>
+              <button type="button" onClick={() => adjustZoom(0.1)}>
+                +
+              </button>
+              <button type="button" onClick={() => setModalZoom(1)}>
+                Reset
+              </button>
+            </div>
+            <div className="modal-image-container" onWheel={handleWheelZoom}>
+              <img
+                src={modalImage.src}
+                alt={modalImage.alt}
+                style={{ transform: `scale(${modalZoom})` }}
+              />
+            </div>
+            <p className="modal-caption">{modalImage.alt}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
