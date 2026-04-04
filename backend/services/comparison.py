@@ -1,6 +1,7 @@
 """
 Main Comparison Service - Orchestrates the entire comparison pipeline
 """
+import gc
 import cv2
 import numpy as np
 import os
@@ -11,6 +12,7 @@ from services.clip_matcher import match_and_highlight
 from services.summarizer import generate_ai_summary
 from utils.pdf_utils import pdf_to_image
 from utils.image_utils import create_combined_output
+from utils.image_ops import downscale_if_needed
 
 async def compare_cad_files(file1_path: str, file2_path: str, temp_dir: str) -> dict:
     """
@@ -25,7 +27,9 @@ async def compare_cad_files(file1_path: str, file2_path: str, temp_dir: str) -> 
     print("\n[1/4] Processing input files...")
     img1_path = _prepare_input(file1_path, temp_dir)
     img2_path = _prepare_input(file2_path, temp_dir)
-    
+    img1_path = downscale_if_needed(img1_path, temp_dir)
+    img2_path = downscale_if_needed(img2_path, temp_dir)
+
     # Step 2: Detect objects
     print("\n[2/4] Detecting components...")
     img1 = cv2.imread(img1_path)
@@ -40,7 +44,8 @@ async def compare_cad_files(file1_path: str, file2_path: str, temp_dir: str) -> 
         edge_threshold=50,
         min_area=10000,
         max_area_ratio=0.75,
-        merge_gap=0
+        merge_gap=0,
+        draw_debug=False,
     )
     
     _, objects2, _ = detect_objects(
@@ -49,8 +54,13 @@ async def compare_cad_files(file1_path: str, file2_path: str, temp_dir: str) -> 
         edge_threshold=50,
         min_area=10000,
         max_area_ratio=0.75,
-        merge_gap=0
+        merge_gap=0,
+        draw_debug=False,
     )
+
+    del img1
+    del img2
+    gc.collect()
     
     print(f"Found {len(objects1)} objects in image 1")
     print(f"Found {len(objects2)} objects in image 2")
@@ -88,7 +98,9 @@ async def compare_cad_files(file1_path: str, file2_path: str, temp_dir: str) -> 
     print(f"\n{'='*60}")
     print("COMPARISON COMPLETE")
     print(f"{'='*60}\n")
-    
+
+    gc.collect()
+
     return {
         "images": {
             "highlighted_1": combined_base64,

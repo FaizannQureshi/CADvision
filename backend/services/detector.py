@@ -9,15 +9,16 @@ def detect_objects(image_bgr,
                    edge_threshold=50,
                    min_area=1000,
                    max_area_ratio=0.8,
-                   merge_gap=0):
+                   merge_gap=0,
+                   draw_debug=True):
     """
     Detect objects in CAD drawing using edge detection and connected components
     
     Returns: (output_image, objects_list, metadata)
     objects_list: list of dicts with 'bbox': (x,y,w,h) and 'points_count': n
     """
-    out_img = image_bgr.copy()
     h, w = image_bgr.shape[:2]
+    out_img = image_bgr.copy() if draw_debug else image_bgr
     img_area = h * w
 
     # Convert to grayscale
@@ -101,14 +102,15 @@ def detect_objects(image_bgr,
     if merge_gap > 0 and objects:
         objects = _merge_boxes(objects, merge_gap, min_area, img_area, max_area_ratio)
 
-    # Draw bounding boxes on output image
-    for idx, obj in enumerate(objects):
-        x0, y0, ww, hh = obj['bbox']
-        cv2.rectangle(out_img, (x0, y0), (x0 + ww - 1, y0 + hh - 1), (0, 255, 0), 2)
-        label = str(idx + 1)
-        font_scale = max(0.5, min(2.0, w / 800.0))
-        cv2.putText(out_img, label, (x0 + 5, y0 + int(20 * font_scale)),
-                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 2, cv2.LINE_AA)
+    # Draw bounding boxes on output image (skip when only bbox list is needed — saves a full copy)
+    if draw_debug:
+        for idx, obj in enumerate(objects):
+            x0, y0, ww, hh = obj['bbox']
+            cv2.rectangle(out_img, (x0, y0), (x0 + ww - 1, y0 + hh - 1), (0, 255, 0), 2)
+            label = str(idx + 1)
+            font_scale = max(0.5, min(2.0, w / 800.0))
+            cv2.putText(out_img, label, (x0 + 5, y0 + int(20 * font_scale)),
+                        cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 255, 0), 2, cv2.LINE_AA)
 
     meta = {
         'original_shape': (h, w),

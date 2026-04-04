@@ -1,8 +1,16 @@
 """
 Image Alignment and Difference Highlighting
 """
+import os
 import cv2
 import numpy as np
+
+
+def _orb_max_features():
+    try:
+        return max(200, int(os.getenv("CADVISION_ORB_MAX_FEATURES", "2000")))
+    except ValueError:
+        return 2000
 
 
 def align_and_highlight_region(img1, img2, result_img, bx1, bx2, 
@@ -82,10 +90,12 @@ def align_and_highlight_region(img1, img2, result_img, bx1, bx2,
     return result_img
 
 
-def align_images(img1, img2, max_features=5000, good_match_percent=0.15):
+def align_images(img1, img2, max_features=None, good_match_percent=0.15):
     """
     Align img2 to img1 using ORB feature matching
     """
+    if max_features is None:
+        max_features = _orb_max_features()
     gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
     gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
     

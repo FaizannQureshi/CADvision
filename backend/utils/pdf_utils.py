@@ -1,18 +1,32 @@
 """
 PDF Processing Utilities
 """
+from __future__ import annotations
+
 from pdf2image import convert_from_path
 from pathlib import Path
 import os
+from typing import Optional
 
 
-def pdf_to_image(pdf_path: str, output_dir: str, dpi: int = 200) -> str:
+def _default_pdf_dpi() -> int:
+    try:
+        d = int(os.getenv("CADVISION_PDF_DPI", "150"))
+        return max(72, min(d, 300))
+    except ValueError:
+        return 150
+
+
+def pdf_to_image(pdf_path: str, output_dir: str, dpi: Optional[int] = None) -> str:
     """
     Convert first page of PDF to PNG image
     Returns: path to converted image
     """
-    print(f"Converting PDF to image: {pdf_path}")
-    
+    if dpi is None:
+        dpi = _default_pdf_dpi()
+
+    print(f"Converting PDF to image: {pdf_path} (dpi={dpi})")
+
     images = convert_from_path(pdf_path, dpi=dpi)
     
     if not images:

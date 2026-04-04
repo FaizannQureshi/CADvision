@@ -1,11 +1,21 @@
 """
 CLIP-based Component Matching and Highlighting
 """
+import gc
+import os
+import threading
 import cv2
 import numpy as np
 import torch
 from PIL import Image
 from services.alignment import align_and_highlight_region
+
+# Limit BLAS/thread explosion on small instances (Render, etc.)
+_torch_threads = os.getenv("CADVISION_TORCH_THREADS", "2")
+try:
+    torch.set_num_threads(max(1, int(_torch_threads)))
+except ValueError:
+    torch.set_num_threads(2)
 
 # Try open_clip then fallback to clip
 try:
@@ -19,6 +29,31 @@ except Exception:
         raise ImportError("No CLIP backend available. Install 'open_clip_torch' or 'clip'")
 
 
+_clip_lock = threading.Lock()
+_clip_model = None
+_clip_preprocess = None
+_clip_device = None
+
+
+def _clip_batch_size() -> int:
+    try:
+        return max(1, int(os.getenv("CADVISION_CLIP_BATCH_SIZE", "8")))
+    except ValueError:
+        return 8
+
+
+def _get_cached_clip(device):
+    """Load CLIP once per process — avoids OOM from reloading weights every request."""
+    global _clip_model, _clip_preprocess, _clip_device
+    with _clip_lock:
+        if _clip_model is None:
+            model, preprocess = _load_clip_model(device)
+            _clip_model = model
+            _clip_preprocess = preprocess
+            _clip_device = device
+        return _clip_model, _clip_preprocess
+
+
 def match_and_highlight(img1_path: str, img2_path: str, 
                        objects1: list, objects2: list,
                        temp_dir: str,
@@ -28,15 +63,16 @@ def match_and_highlight(img1_path: str, img2_path: str,
     Match components using CLIP and highlight differences
     Returns: highlighted image (numpy array)
     """
-    # Load CLIP model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, preprocess = _load_clip_model(device)
-    
-    # Load images
-    pil1 = Image.open(img1_path).convert("RGB")
-    pil2 = Image.open(img2_path).convert("RGB")
+    model, preprocess = _get_cached_clip(device)
+
+    # Single disk read — avoid duplicate PIL + cv2 buffers
     img1 = cv2.imread(img1_path)
     img2 = cv2.imread(img2_path)
+    if img1 is None or img2 is None:
+        raise RuntimeError("Could not read images for CLIP matching")
+    pil1 = Image.fromarray(cv2.cvtColor(img1, cv2.COLOR_BGR2RGB))
+    pil2 = Image.fromarray(cv2.cvtColor(img2, cv2.COLOR_BGR2RGB))
     
     # Filter by area
     objects1 = [o for o in objects1 if o['bbox'][2] * o['bbox'][3] >= min_area]
@@ -90,7 +126,11 @@ def match_and_highlight(img1_path: str, img2_path: str,
                 img1, img2, result, combined_bx1, bx2,
                 img1_h, img1_w, img2_h, img2_w
             )
-    
+
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     return result
 
 
@@ -109,18 +149,19 @@ def _load_clip_model(device):
         return model, preprocess
 
 
-def _get_embeddings(model, preprocess, pil_img, bboxes, device, batch_size=32):
-    """Extract CLIP embeddings for bounding boxes"""
+def _get_embeddings(model, preprocess, pil_img, bboxes, device, batch_size=None):
+    """Extract CLIP embeddings for bounding boxes (batched build to avoid huge intermediate tensors)."""
+    if batch_size is None:
+        batch_size = _clip_batch_size()
     crops = [_crop_bbox(pil_img, bb) for bb in bboxes]
     if not crops:
         return np.zeros((0, 512), dtype=np.float32)
-    
-    tensors = torch.cat([preprocess(c).unsqueeze(0) for c in crops], dim=0).to(device)
-    
+
+    embeds = []
     with torch.no_grad():
-        embeds = []
-        for i in range(0, len(tensors), batch_size):
-            batch = tensors[i:i+batch_size]
+        for i in range(0, len(crops), batch_size):
+            chunk = crops[i : i + batch_size]
+            batch = torch.cat([preprocess(c).unsqueeze(0) for c in chunk], dim=0).to(device)
             if _CLIP_BACKEND == "open_clip":
                 emb = model.encode_image(batch)
             else:
@@ -128,7 +169,8 @@ def _get_embeddings(model, preprocess, pil_img, bboxes, device, batch_size=32):
             emb = emb.float()
             emb = emb / emb.norm(dim=-1, keepdim=True)
             embeds.append(emb.cpu().numpy())
-    
+            del batch, emb
+
     return np.vstack(embeds)
 
 
