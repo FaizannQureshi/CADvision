@@ -60,7 +60,7 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--accent-primary);
+  background: linear-gradient(135deg, #e85a3a 0%, #d14939 55%, #f5aa3c 100%);
   color: #fff;
   font-weight: 700;
   letter-spacing: 0.08em;
