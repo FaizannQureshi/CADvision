@@ -71,12 +71,13 @@ function App() {
       });
 
       if (!response.ok) {
+        const text = await response.text();
         let detail = "Comparison failed.";
         try {
-          const payload = await response.json();
+          const payload = JSON.parse(text);
           detail = payload.detail || detail;
-        } catch (_) {
-          detail = await response.text();
+        } catch {
+          detail = text || detail;
         }
         throw new Error(detail);
       }
