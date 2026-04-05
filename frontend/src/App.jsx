@@ -125,11 +125,20 @@ function App() {
   return (
     <div className="page">
       <header className="top-strip">
-        <div className="site-brand">
-          <span className="brand-mark">CV</span>
-          {/* <span className="brand-text">Oracle Cloud</span> */}
+        <div className="top-strip__inner">
+          <div className="site-brand">
+            <span className="brand-mark" aria-hidden="true">
+              CV
+            </span>
+            <div className="brand-lockup-text">
+              <span className="brand-title">CADVision</span>
+              <span className="brand-tagline">AI drawing comparison</span>
+            </div>
+          </div>
+          <div className="top-strip__end">
+            <span className="top-caption">CADVISION</span>
+          </div>
         </div>
-        <span className="top-caption">CADVISION</span>
       </header>
 
       <div className="page-content">
