@@ -268,7 +268,7 @@ function App() {
       </div>
 
       <footer>
-        <span>© 2024 CADVision. Powered by Oracle Cloud Infrastructure.</span>
+        <span>© 2024 CADVision.</span>
         <span>AI-Enhanced CAD Comparison Tool</span>
       </footer>
 
