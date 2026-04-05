@@ -52,7 +52,7 @@ function App() {
     event.preventDefault();
 
     if (!file1 || !file2) {
-      setError("Please select both files before submitting.");
+      setError("Choose both drawings: your baseline file first, then the revised version.");
       return;
     }
 
@@ -85,7 +85,7 @@ function App() {
       const payload = await response.json();
       setResult(payload);
     } catch (err) {
-      setError(err.message || "An unexpected error occurred.");
+      setError(err.message || "Something went wrong. Check your connection and try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -142,68 +142,107 @@ function App() {
       </header>
 
       <div className="page-content">
-        <section className="hero">
+        <section className="hero animate-section animate-section--1">
           <div className="hero-copy">
-            <h1>CADVision: An AI-powered CAD Designs Comparison Tool</h1>
+            <p className="hero-eyebrow">Drawing review, simplified</p>
+            <h1>See what changed between your CAD revisions</h1>
             <p>
-              CADVISION compares two drawing
-              revisions, highlights differences, and keeps your review workflow simple.
+              Upload your baseline and updated exports — we align the sheets, highlight adds and removals,
+              and summarize the differences so you can review faster.
             </p>
           </div>
           <div className="hero-visual">
             <div className="hero-visual-frame">
-              <span className="hero-visual-label">Always Free Experience</span>
-              <p>Upload two revisions and review differences in seconds.</p>
+              <span className="hero-visual-label">How it works</span>
+              <ol className="hero-steps">
+                <li>
+                  <span className="hero-step-num" aria-hidden="true">1</span>
+                  <span>
+                    <strong>Upload two files</strong> — PNG, JPG, or PDF (first page for PDFs).
+                  </span>
+                </li>
+                <li>
+                  <span className="hero-step-num" aria-hidden="true">2</span>
+                  <span>
+                    <strong>We compare &amp; highlight</strong> — greens for additions, reds for removals.
+                  </span>
+                </li>
+                <li>
+                  <span className="hero-step-num" aria-hidden="true">3</span>
+                  <span>
+                    <strong>Read the summary</strong> — optional AI notes for your review or handoff.
+                  </span>
+                </li>
+              </ol>
             </div>
           </div>
         </section>
 
-        <main className="workspace">
+        <main className="workspace animate-section animate-section--2">
           <section className="workspace-card">
             <div className="workspace-header">
-              <h2>Compare your drawings</h2>
-              <p>
-                Choose two CAD exports (PNG, JPG, or PDF). CADVISION aligns components and highlights
-                key changes automatically.
+              <h2>Upload your drawings</h2>
+              <p className="workspace-lead">
+                Put <strong>Drawing A</strong> first (baseline or older revision), then <strong>Drawing B</strong>{" "}
+                (updated). Same sheet or view works best for a clear diff.
               </p>
             </div>
 
             <form className="upload-form" onSubmit={handleSubmit}>
-              <label>
-                <span>First file</span>
+              <label className="upload-field">
+                <span className="upload-field-title">Drawing A — baseline</span>
+                <span className="upload-field-hint">Older revision, reference, or “before”</span>
                 <input
                   type="file"
                   accept=".png,.jpg,.jpeg,.pdf"
                   onChange={(event) => handleFileChange(event, setFile1)}
                   disabled={isSubmitting}
+                  aria-describedby="hint-a"
                 />
+                <span id="hint-a" className="file-picked" aria-live="polite">
+                  {file1 ? file1.name : "No file chosen yet"}
+                </span>
               </label>
-              <label>
-                <span>Second file</span>
+              <label className="upload-field">
+                <span className="upload-field-title">Drawing B — revised</span>
+                <span className="upload-field-hint">Newer revision or “after”</span>
                 <input
                   type="file"
                   accept=".png,.jpg,.jpeg,.pdf"
                   onChange={(event) => handleFileChange(event, setFile2)}
                   disabled={isSubmitting}
+                  aria-describedby="hint-b"
                 />
+                <span id="hint-b" className="file-picked" aria-live="polite">
+                  {file2 ? file2.name : "No file chosen yet"}
+                </span>
               </label>
 
-              <button className="compare-button" type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Comparing..." : "Run Comparison"}
+              <button
+                className={`compare-button${isSubmitting ? " compare-button--loading" : ""}`}
+                type="submit"
+                disabled={isSubmitting}
+                aria-busy={isSubmitting}
+              >
+                {isSubmitting ? "Analyzing your drawings…" : "Compare drawings"}
               </button>
             </form>
 
-            {error && <div className="status error">{error}</div>}
+            {error && (
+              <div className="status error" role="alert">
+                {error}
+              </div>
+            )}
           </section>
 
           {result && (
-            <section className="results">
+            <section className="results animate-section animate-section--3">
               <div className="results-header">
                 {(() => {
                   const aiText = result?.ai_summary || "";
                   const noChanges = /no change(s)?|no structural changes detected/i.test(aiText);
                   return (
-                    <h2>{noChanges ? "No changes" : "Comparison results"}</h2>
+                    <h2>{noChanges ? "No changes detected" : "Here’s your comparison"}</h2>
                   );
                 })()}
                 <p>
@@ -211,8 +250,8 @@ function App() {
                     const aiText = result?.ai_summary || "";
                     const noChanges = /no change(s)?|no structural changes detected/i.test(aiText);
                     return noChanges
-                      ? "No differences detected between the two revisions."
-                      : "Review the highlighted differences and AI analysis below.";
+                      ? "These two files look the same to our pipeline — try another pair if you expected edits."
+                      : "Use the map below to spot changes. Green usually means something new; red means removed. Scroll down for a written summary.";
                   })()}
                 </p>
 
@@ -220,11 +259,11 @@ function App() {
                   <div className="legend">
                     <span className="legend-item">
                       <span className="legend-swatch legend-add" />
-                      Additions (green)
+                      Added in Drawing B (green)
                     </span>
                     <span className="legend-item">
                       <span className="legend-swatch legend-del" />
-                      Deletions (red)
+                      Removed vs Drawing A (red)
                     </span>
                   </div>
                 )}
@@ -233,7 +272,7 @@ function App() {
               {combinedSrc && (
                 <figure className="image-card combined-image">
                   <img src={combinedSrc} alt="Combined comparison" />
-                  <figcaption>Side-by-side Comparison with Highlights</figcaption>
+                  <figcaption>Combined view with highlights</figcaption>
                   <div className="figure-actions">
                     <button
                       type="button"
@@ -256,8 +295,8 @@ function App() {
               <div className="summary-card">
                 <div className="summary-card-header">
                   <div>
-                    <p className="summary-eyebrow">AI-Generated Analysis</p>
-                    <h3>Revision Summary</h3>
+                    <p className="summary-eyebrow">AI summary</p>
+                    <h3>What changed (plain language)</h3>
                   </div>
                 </div>
                 {result?.ai_summary ? (
@@ -267,7 +306,7 @@ function App() {
                   />
                 ) : (
                   <p className="summary-placeholder">
-                    AI summary will appear here after a successful comparison.
+                    When the comparison finishes, a short written summary will show up here.
                   </p>
                 )}
               </div>
@@ -276,9 +315,12 @@ function App() {
         </main>
       </div>
 
-      <footer>
-        <span>© 2024 CADVision.</span>
-        <span>AI-Enhanced CAD Comparison Tool</span>
+      <footer className="site-footer">
+        <span>© {new Date().getFullYear()} CADVision</span>
+        <span className="site-footer-sep" aria-hidden="true">
+          ·
+        </span>
+        <span>Built for quick drawing reviews</span>
       </footer>
 
       {modalImage && (
