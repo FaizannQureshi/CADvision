@@ -137,7 +137,7 @@ function App() {
           <div className="hero-copy">
             <h1>CADVision: An AI-powered CAD Designs Comparison Tool</h1>
             <p>
-              Inspired by the Oracle Cloud experience, CADVISION compares two drawing
+              CADVISION compares two drawing
               revisions, highlights differences, and keeps your review workflow simple.
             </p>
           </div>
